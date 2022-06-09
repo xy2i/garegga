@@ -1,6 +1,10 @@
 //! VGA driver
 
-use ::volatile::Volatile;
+use core::fmt;
+use core::fmt::Write;
+use lazy_static::lazy_static;
+use spin::Mutex;
+use volatile::Volatile;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,12 +46,11 @@ struct VgaChar {
 }
 
 #[repr(C)]
-pub struct Writer {
+struct Writer {
     buf: &'static mut [[Volatile<VgaChar>; Writer::WIDTH]; Writer::HEIGHT],
     col: usize,
     color_code: ColorCode,
 }
-
 impl Writer {
     const WIDTH: usize = 80;
     const HEIGHT: usize = 25;
@@ -72,10 +75,10 @@ impl Writer {
         self.col = 0;
     }
 
-    pub fn write_byte(&mut self, byte: u8) {
-        match byte {
+    fn do_write_char(&mut self, c: u8) {
+        match c {
             b'\n' => self.new_line(),
-            byte => {
+            c => {
                 if self.col >= Writer::WIDTH {
                     self.new_line();
                 }
@@ -85,7 +88,7 @@ impl Writer {
                 let col = self.col;
 
                 self.buf[row][col].write(VgaChar {
-                    char: byte,
+                    char: c,
                     color_code: self.color_code,
                 });
 
@@ -94,22 +97,50 @@ impl Writer {
         }
     }
 
-    pub fn write(&mut self, s: &str) {
+    fn do_write_str(&mut self, s: &str) {
         for byte in s.bytes() {
-            self.write_byte(byte);
+            self.do_write_char(byte);
         }
     }
 }
 
-pub fn print() {
-    let mut w = Writer {
+/// impl Write to get write_fmt()
+impl Write for Writer {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.do_write_str(s);
+        Ok(())
+    }
+
+    fn write_char(&mut self, c: char) -> core::fmt::Result {
+        self.do_write_char(c as u8);
+        Ok(())
+    }
+}
+
+lazy_static! {
+    static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         buf: unsafe {
             &mut *(0xb8000 as *mut [[Volatile<VgaChar>; Writer::WIDTH]; Writer::HEIGHT])
         },
         color_code: ColorCode::new(Color::Yellow, Color::Black),
         col: 0,
-    };
-    w.write("abcdefghijklmnopqrstuvwxyzfffff");
-    w.write("abcdefghijklmnopqrstuvwxyzfffff");
-    w.write("abcdefghijklmnopqrstuvwxyzfffff");
+    });
+}
+
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => ($crate::vga::_print(format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+#[doc(hidden)]
+pub fn _print(args: fmt::Arguments) {
+    use core::fmt::Write;
+    // unwrap will never panic since we always return Ok
+    WRITER.lock().write_fmt(args).unwrap();
 }

@@ -3,7 +3,6 @@
 //! https://github.com/stivale/stivale2-barebones
 
 use crate::kernel_main;
-use core::fmt::Write;
 use core::ptr;
 
 #[repr(C, align(0x1000))]
@@ -19,10 +18,10 @@ unsafe impl Send for Tag {}
 unsafe impl Sync for Tag {}
 
 struct Header {
-    entry_point: *const (),
-    stack: *const u8,
-    flags: u64,
-    tags: *const Tag,
+    _entry_point: *const (),
+    _stack: *const u8,
+    _flags: u64,
+    _tags: *const Tag,
 }
 unsafe impl Send for Header {}
 unsafe impl Sync for Header {}
@@ -58,23 +57,23 @@ unsafe impl Sync for Header {}
 // }
 
 struct TerminalHeaderTag {
-    tag: Tag,
-    flags: u64,
+    _tag: Tag,
+    _flags: u64,
 }
 static STIVALE_TERM: TerminalHeaderTag = TerminalHeaderTag {
-    tag: Tag {
+    _tag: Tag {
         identifier: 0xa85d499b1823be72,
         next: ptr::null(),
     },
-    flags: 0,
+    _flags: 0,
 };
 
 #[link_section = ".stivale2hdr"]
 #[no_mangle]
 #[used]
 static STIVALE_HDR: Header = Header {
-    entry_point: kernel_main as *const (),
-    stack: STACK.0.as_ptr_range().end,
+    _entry_point: kernel_main as *const (),
+    _stack: STACK.0.as_ptr_range().end,
     // Bit 1, if set, causes the bootloader to return to us pointers in the
     // higher half, which we likely want since this is a higher half kernel.
     // Bit 2, if set, tells the bootloader to enable protected memory ranges,
@@ -85,6 +84,7 @@ static STIVALE_HDR: Header = Header {
     // available to load the kernel, rather than relying on us telling it where
     // to load it.
     // Bit 4 disables a deprecated feature and should always be set.
-    flags: (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4),
-    tags: &STIVALE_TERM as *const TerminalHeaderTag as *const Tag,
+    // TODO: bit 2 doesn't work
+    _flags: (1 << 1) | (1 << 3) | (1 << 4),
+    _tags: &STIVALE_TERM as *const TerminalHeaderTag as *const Tag,
 };

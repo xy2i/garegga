@@ -28,7 +28,7 @@ pub enum Color {
     White = 15,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 struct ColorCode(u8);
 
@@ -38,7 +38,7 @@ impl ColorCode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 #[repr(C)]
 struct VgaChar {
     char: u8,
@@ -122,7 +122,7 @@ lazy_static! {
         buf: unsafe {
             &mut *(0xb8000 as *mut [[Volatile<VgaChar>; Writer::WIDTH]; Writer::HEIGHT])
         },
-        color_code: ColorCode::new(Color::Yellow, Color::Black),
+        color_code: ColorCode::new(Color::White, Color::Black),
         col: 0,
     });
 }
@@ -140,7 +140,21 @@ macro_rules! println {
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
-    use core::fmt::Write;
     // unwrap will never panic since we always return Ok
     WRITER.lock().write_fmt(args).unwrap();
+}
+
+#[cfg(test)]
+mod test {
+    use crate::vga::*;
+
+    #[test_case]
+    fn println_should_update_vga_buffer() {
+        let s = "Test string to test things";
+        println!("{}", s);
+        for (i, c) in s.chars().enumerate() {
+            let screen_char = WRITER.lock().buf[Writer::HEIGHT - 2][i].read();
+            assert_eq!(char::from(screen_char.char), c);
+        }
+    }
 }

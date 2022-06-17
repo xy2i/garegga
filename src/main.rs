@@ -9,7 +9,10 @@ mod io;
 mod serial;
 mod test;
 mod vga;
+mod x86;
 
+use crate::x86::hlt;
+#[cfg(not(test))]
 use core::panic::PanicInfo;
 
 // see test.rs for the panic test handler
@@ -17,7 +20,9 @@ use core::panic::PanicInfo;
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
-    loop {}
+    loop {
+        hlt();
+    }
 }
 
 #[no_mangle]
@@ -28,5 +33,7 @@ extern "C" fn kernel_main(/*boot_info: &'static StivaleStruct*/) -> ! {
     #[cfg(test)]
     test_main();
 
-    loop {}
+    loop {
+        hlt();
+    }
 }

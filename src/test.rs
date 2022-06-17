@@ -3,7 +3,7 @@
 // cfg(test) for whole module.
 #![cfg(test)]
 
-use crate::{print, println, serial_print, serial_println};
+use crate::{serial_print, serial_println};
 use core::arch::asm;
 use core::panic::PanicInfo;
 
@@ -61,6 +61,7 @@ fn panic(info: &PanicInfo) -> ! {
 }
 
 #[test_case]
-fn trivial_assertion() {
-    assert_eq!(1, 1);
+fn test_framework_works() {
+    let a = 2;
+    assert_eq!(a, 2);
 }

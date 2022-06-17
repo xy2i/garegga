@@ -1,21 +1,12 @@
 //! Serial port implementation (uart_16650).
 
-use crate::{
-    io::{inb, outb},
-    println,
-};
+use crate::io::{inb, outb};
 use core::fmt::Write;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
 #[repr(transparent)]
 pub struct Serial();
-
-#[derive(Debug)]
-pub struct A {
-    a: u32,
-    b: u32,
-}
 
 impl Serial {
     // https://en.wikibooks.org/wiki/Serial_Programming/8250_UART_Programming#Software_interrupts
@@ -67,7 +58,7 @@ impl Serial {
                 core::hint::spin_loop();
             }
 
-            return outb(Serial::PORT, byte);
+            outb(Serial::PORT, byte);
         }
     }
 }

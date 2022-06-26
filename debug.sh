@@ -22,4 +22,5 @@ limine/limine-deploy barebones.iso
 rm -rf iso_root
 
 # 4. run the kernel
-qemu-system-x86_64 -cdrom barebones.iso --no-reboot -d int -D qemulog.log -serial stdio -s -S 
+qemu-system-x86_64 -cdrom barebones.iso --no-reboot -d int -D qemulog.log -serial stdio -s -S \
+    -display none

@@ -5,6 +5,8 @@
 #![feature(asm_const)]
 #![test_runner(crate::test::test_runner)]
 #![reexport_test_harness_main = "test_main"]
+#![allow(unused_macros)]
+#![allow(unused_imports)]
 
 mod boot;
 mod io;
@@ -24,7 +26,8 @@ use core::panic::PanicInfo;
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    println!("{}", info);
+    error!("PANIC: {}", info);
+    println!("PANIC: {}", info);
     loop {
         hlt();
     }

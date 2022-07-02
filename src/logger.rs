@@ -5,12 +5,17 @@ use core::fmt::{self, write, Write};
 
 use crate::serial::COM1;
 
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 pub enum Level {
+    #[allow(dead_code)]
     Trace = 0,
+    #[allow(dead_code)]
     Debug = 1,
+    #[allow(dead_code)]
     Info = 2,
+    #[allow(dead_code)]
     Warn = 3,
+    #[allow(dead_code)]
     Error = 4,
 }
 
@@ -52,7 +57,7 @@ pub fn _log(args: core::fmt::Arguments, record: Record) {
 macro_rules! log_macro {
     ($level: expr, $($arg:tt)*) => (
         $crate::logger::_log(format_args!($($arg)*),
-        crate::logger::Record { line: line!(), file: file!(), level: $level })
+        $crate::logger::Record { line: line!(), file: file!(), level: $level })
     );
 }
 

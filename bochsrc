@@ -1,0 +1,5 @@
+megs: 256
+boot: cdrom
+ata0-master: type=cdrom, path="barebones.iso"
+display_library: x, options="gui_debug"
+

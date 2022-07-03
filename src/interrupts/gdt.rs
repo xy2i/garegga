@@ -87,8 +87,8 @@ struct SystemSegmentDescriptor {
     base_63_32: u32,
     zero: u32,
 }
+
 impl SystemSegmentDescriptor {
-    /// Just hardcode a tss impl.
     const fn tss() -> Self {
         Self {
             limit_15_0: 0,
@@ -170,39 +170,10 @@ pub fn load() {
     unsafe {
         TSS.ist_list[DOUBLE_FAULT_IST] =
             double_fault_stack.0.as_ptr_range().end as *const u8 as usize;
-    }
 
-    log!("sizeof gdt {}", size_of::<Gdt>());
-    log!("sizeof tss {:#x}", size_of::<Tss>());
-    assert_eq!(size_of::<Tss>(), 0x68);
-    log!(
-        "sizeof SystemSegmentDescriptor {}",
-        size_of::<SystemSegmentDescriptor>()
-    );
-    log!(
-        "sizeof UserSegmentDescriptor {}",
-        size_of::<UserSegmentDescriptor>()
-    );
-
-    // Set the TSS entry in the GDT.
-    unsafe {
+        // Set the TSS entry in the GDT.
         let tss_ref = &mut GDT.tss;
         tss_ref.set_base(&TSS).set_limit(size_of::<Tss>() as u16);
-    }
-
-    unsafe {
-        log!("ok dont lie to me, wheres the tss {:#x?}", GDT);
-        log!("tss addr {:#x?}", &TSS as *const Tss);
-        log!("size of tss {:#x}", size_of::<Tss>());
-        // log!("tss {:#x?}", tss);
-    }
-
-    // Flush GDT.
-    unsafe {
-        let register_format = DescriptorTableRegister {
-            limit: (size_of::<Gdt>() - 1) as u16,
-            base: &GDT as *const Gdt as *const u64,
-        };
 
         // Flush the GDT, update CS and other segments registers.
         //
@@ -211,6 +182,11 @@ pub fn load() {
         // https://stackoverflow.com/questions/52490438/why-cant-mov-set-cs-the-code-segment-register-even-though-it-can-set-others
         // There are no long jumps in long mode, so we'll use the far return instruction,
         // which pops IP and CS off the stack.
+        let register_format = DescriptorTableRegister {
+            limit: (size_of::<Gdt>() - 1) as u16,
+            base: &GDT as *const Gdt as *const u64,
+        };
+
         asm!(
             r#"
 lgdt [{gdt}]
@@ -231,17 +207,11 @@ mov ss, ax
             ip = lateout(reg) _,
             ds = const KERNEL_DS,
             options(readonly, nostack, preserves_flags)
-        )
-    }
-}
+        );
 
-pub fn load2() {
-    log!("before ltr");
-    // Load the TSS.
-    unsafe {
+        // Load the TSS.
         asm!("ltr {:x}", in(reg) TSS_SELECTOR, options(readonly, nostack, preserves_flags));
     }
-    log!("ltr success! good job");
 }
 
 #[cfg(test)]
@@ -251,5 +221,43 @@ mod test {
     #[test_case]
     fn tss_size_is_correct() {
         assert_eq!(size_of::<Tss>(), 0x68);
+    }
+
+    #[test_case]
+    fn code_and_data_selectors_match() {
+        unsafe {
+            let cs_index = ((KERNEL_CS >> 3) & 0b11) as usize;
+            let gdt_cs_entry = &GDT.user_segments[cs_index];
+            assert!(gdt_cs_entry
+                .lower_flags
+                .contains(SegmentLowerFlags::KERNEL_CODE));
+
+            let ds_index = ((KERNEL_DS >> 3) & 0b11) as usize;
+            let gdt_ds_entry = &GDT.user_segments[ds_index];
+            assert!(gdt_ds_entry
+                .lower_flags
+                .contains(SegmentLowerFlags::KERNEL_DATA));
+        }
+    }
+
+    #[test_case]
+    fn tss_selector_matches() {
+        impl From<&SystemSegmentDescriptor> for usize {
+            fn from(a: &SystemSegmentDescriptor) -> Self {
+                (a.base_63_32 as usize) << 32
+                    | (a.base_31_24 as usize) << 24
+                    | (a.base_23_16 as usize) << 16
+                    | (a.base_15_0 as usize)
+            }
+        }
+        unsafe {
+            let gdt_tss_entry = &GDT.tss;
+            let tss_addr: usize = gdt_tss_entry.into();
+            assert!(gdt_tss_entry
+                .lower_flags
+                .contains(SegmentLowerFlags::TSS_SEGMENT));
+
+            assert_eq!(tss_addr, &TSS as *const Tss as usize);
+        }
     }
 }

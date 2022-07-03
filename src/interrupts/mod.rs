@@ -35,5 +35,4 @@ pub fn init() {
     gdt::load();
     debug!("Initializing IDT");
     idt::load();
-    gdt::load2();
 }

@@ -60,7 +60,6 @@ extern "x86-interrupt" fn stack_handler() {
     log!("got seg");
 }
 extern "x86-interrupt" fn gpf_handler(frame: ExceptionStackFrame, error_code: u64) {
-    log!("got gpf (whatevr just debug here)");
     log!("frame: {:#x?}, error_code: {:#x?}", frame, error_code);
     panic!();
 }
@@ -75,14 +74,11 @@ static mut IDT: IdtType = unsafe { MaybeUninit::uninit().assume_init() };
 
 pub fn load() {
     unsafe {
+        IDT[8] = MaybeUninit::new(IdtDescriptor::new(double_fault_handler as usize, 1));
         IDT[11] = MaybeUninit::new(IdtDescriptor::new(seg_handler as usize, 0));
         IDT[12] = MaybeUninit::new(IdtDescriptor::new(stack_handler as usize, 0));
         IDT[13] = MaybeUninit::new(IdtDescriptor::new(gpf_handler as usize, 0));
         IDT[33] = MaybeUninit::new(IdtDescriptor::new(handler as usize, 0));
-
-        //test double f
-        IDT[8] = MaybeUninit::new(IdtDescriptor::new(double_fault_handler as usize, 1));
-        trace!("dbl fault entry {:#x?}", IDT[8].assume_init());
 
         let register_format = DescriptorTableRegister {
             limit: (size_of::<IdtType>() - 1) as u16,

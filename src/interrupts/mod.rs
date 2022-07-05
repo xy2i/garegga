@@ -1,6 +1,6 @@
 //! Manage x86 interrupts.
 
-use core::arch::asm;
+use core::ptr;
 
 /// Format for use by LIDT and LGDT
 #[repr(C, packed(2))]
@@ -18,6 +18,7 @@ pub enum Ring {
 
 // Segment selectors (4.5 AMD64 manual)
 type SegmentSelector = u16;
+
 const fn new_segment(index: u16, rpl: Ring) -> SegmentSelector {
     index << 3 | (rpl as u16)
 }
@@ -35,4 +36,8 @@ pub fn init() {
     gdt::load();
     debug!("Initializing IDT");
     idt::load();
+    unsafe {
+        let p = 0xffff_ffff_0000_0000 as *const usize;
+        ptr::read(p);
+    }
 }

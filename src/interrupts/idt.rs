@@ -1,7 +1,9 @@
-use crate::interrupts::{DescriptorTableRegister, KERNEL_CS};
-use bitflags::bitflags;
 use core::arch::asm;
 use core::mem::{size_of, MaybeUninit};
+
+use bitflags::bitflags;
+
+use crate::interrupts::{DescriptorTableRegister, KERNEL_CS};
 
 bitflags! {
     struct GateFlags: u8 {
@@ -50,40 +52,51 @@ pub struct ExceptionStackFrame {
     pub ss: u64,
 }
 
-extern "x86-interrupt" fn handler() {
+extern "x86-interrupt" fn handler(_frame: ExceptionStackFrame) {
     log!("got handled!");
 }
-extern "x86-interrupt" fn seg_handler() {
+
+extern "x86-interrupt" fn seg_handler(_frame: ExceptionStackFrame) {
     log!("got seg");
 }
-extern "x86-interrupt" fn stack_handler() {
+
+extern "x86-interrupt" fn stack_handler(_frame: ExceptionStackFrame) {
     log!("got seg");
 }
+
+extern "x86-interrupt" fn page_fault_handler(_frame: ExceptionStackFrame, _error_code: u64) {
+    log!("got pf");
+}
+
 extern "x86-interrupt" fn gpf_handler(frame: ExceptionStackFrame, error_code: u64) {
     log!("frame: {:#x?}, error_code: {:#x?}", frame, error_code);
-    panic!();
 }
+
 extern "x86-interrupt" fn double_fault_handler(frame: ExceptionStackFrame, error_code: u64) {
     error!("Exception frame: {:#x?}. Error code: {}", frame, error_code);
     panic!("Double fault");
 }
 
 const NB_ENTRIES: usize = 256;
+
 type IdtType = [MaybeUninit<IdtDescriptor>; NB_ENTRIES];
+
 static mut IDT: IdtType = unsafe { MaybeUninit::uninit().assume_init() };
 
 pub fn load() {
     unsafe {
-        IDT[8] = MaybeUninit::new(IdtDescriptor::new(double_fault_handler as usize, 1));
+        IDT[8] = MaybeUninit::new(IdtDescriptor::new(double_fault_handler as usize, 2));
         IDT[11] = MaybeUninit::new(IdtDescriptor::new(seg_handler as usize, 0));
         IDT[12] = MaybeUninit::new(IdtDescriptor::new(stack_handler as usize, 0));
         IDT[13] = MaybeUninit::new(IdtDescriptor::new(gpf_handler as usize, 0));
+        IDT[14] = MaybeUninit::new(IdtDescriptor::new(page_fault_handler as usize, 0));
         IDT[33] = MaybeUninit::new(IdtDescriptor::new(handler as usize, 0));
 
         let register_format = DescriptorTableRegister {
             limit: (size_of::<IdtType>() - 1) as u16,
             base: IDT.as_ptr() as *const u64,
         };
+
         asm!("lidt [{}]", in(reg) &register_format, options(readonly, nostack, preserves_flags));
     }
 }

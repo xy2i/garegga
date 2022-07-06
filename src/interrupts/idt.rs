@@ -16,11 +16,11 @@ bitflags! {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-struct IdtDescriptor {
+pub struct IdtDescriptor {
     offset_15_0: u16,
     segment_selector: u16,
     // Bits 0..2: IST, rest is 0
-    ist: u8,
+    pub ist: u8,
     attributes: GateFlags,
     offset_31_16: u16,
     offset_63_32: u32,
@@ -79,13 +79,13 @@ extern "x86-interrupt" fn double_fault_handler(frame: ExceptionStackFrame, error
 
 const NB_ENTRIES: usize = 256;
 
-type IdtType = [MaybeUninit<IdtDescriptor>; NB_ENTRIES];
+pub type IdtType = [MaybeUninit<IdtDescriptor>; NB_ENTRIES];
 
-static mut IDT: IdtType = unsafe { MaybeUninit::uninit().assume_init() };
+pub static mut IDT: IdtType = unsafe { MaybeUninit::uninit().assume_init() };
 
 pub fn load() {
     unsafe {
-        IDT[8] = MaybeUninit::new(IdtDescriptor::new(double_fault_handler as usize, 2));
+        IDT[8] = MaybeUninit::new(IdtDescriptor::new(double_fault_handler as usize, 1));
         IDT[11] = MaybeUninit::new(IdtDescriptor::new(seg_handler as usize, 0));
         IDT[12] = MaybeUninit::new(IdtDescriptor::new(stack_handler as usize, 0));
         IDT[13] = MaybeUninit::new(IdtDescriptor::new(gpf_handler as usize, 0));

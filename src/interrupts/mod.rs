@@ -1,7 +1,5 @@
 //! Manage x86 interrupts.
 
-use core::ptr;
-
 /// Format for use by LIDT and LGDT
 #[repr(C, packed(2))]
 struct DescriptorTableRegister {
@@ -36,8 +34,8 @@ pub fn init() {
     gdt::load();
     debug!("Initializing IDT");
     idt::load();
-    unsafe {
-        let p = 0xffff_ffff_0000_0000 as *const usize;
-        ptr::read(p);
-    }
+    // unsafe {
+    //     let p = 0xffff_ffff_0000_0000 as *const usize;
+    //     ptr::read(p);
+    // }
 }

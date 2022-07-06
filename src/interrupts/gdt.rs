@@ -3,10 +3,12 @@
 //! Its main use is for privilege level switching and the TSS.  
 //! Because it's a set-once structure, this module is very infexible.
 
-use crate::interrupts::{DescriptorTableRegister, KERNEL_CS, KERNEL_DS, TSS_SELECTOR};
-use bitflags::bitflags;
 use core::arch::asm;
 use core::mem::{size_of, MaybeUninit};
+
+use bitflags::bitflags;
+
+use crate::interrupts::{DescriptorTableRegister, KERNEL_CS, KERNEL_DS, TSS_SELECTOR};
 
 bitflags! {
     struct SegmentUpperFlags: u8 {
@@ -127,6 +129,7 @@ struct Tss {
     _ignored4: MaybeUninit<u16>,
     pub io_map_base: u16,
 }
+
 impl Tss {
     pub const fn new() -> Self {
         Self {
@@ -216,7 +219,28 @@ mov ss, ax
 
 #[cfg(test)]
 mod test {
+    use crate::interrupts::idt::IDT;
+
     use super::*;
+
+    fn get_gdt() -> &'static Gdt {
+        // Assumes the Gdt struct is correct
+        unsafe {
+            let mut gdt: MaybeUninit<DescriptorTableRegister> = MaybeUninit::uninit();
+            asm!("sgdt [{}]", in(reg) &mut gdt);
+            let gdt = gdt.assume_init().base as *const Gdt;
+            &*gdt
+        }
+    }
+
+    fn get_tss() -> &'static Tss {
+        // Assumes the Tss struct is correct
+        let gdt = get_gdt();
+        unsafe {
+            let tss_addr: usize = (&gdt.tss).into();
+            &*(tss_addr as *const Tss)
+        }
+    }
 
     #[test_case]
     fn tss_size_is_correct() {
@@ -225,39 +249,49 @@ mod test {
 
     #[test_case]
     fn code_and_data_selectors_match() {
-        unsafe {
-            let cs_index = ((KERNEL_CS >> 3) & 0b11) as usize;
-            let gdt_cs_entry = &GDT.user_segments[cs_index];
-            assert!(gdt_cs_entry
-                .lower_flags
-                .contains(SegmentLowerFlags::KERNEL_CODE));
+        let gdt = get_gdt();
+        let cs_index = ((KERNEL_CS >> 3) & 0b11) as usize;
+        let gdt_cs_entry = &gdt.user_segments[cs_index];
+        assert!(gdt_cs_entry
+            .lower_flags
+            .contains(SegmentLowerFlags::KERNEL_CODE));
 
-            let ds_index = ((KERNEL_DS >> 3) & 0b11) as usize;
-            let gdt_ds_entry = &GDT.user_segments[ds_index];
-            assert!(gdt_ds_entry
-                .lower_flags
-                .contains(SegmentLowerFlags::KERNEL_DATA));
-        }
+        let ds_index = ((KERNEL_DS >> 3) & 0b11) as usize;
+        let gdt_ds_entry = &gdt.user_segments[ds_index];
+        assert!(gdt_ds_entry
+            .lower_flags
+            .contains(SegmentLowerFlags::KERNEL_DATA));
     }
 
     #[test_case]
     fn tss_selector_matches() {
-        impl From<&SystemSegmentDescriptor> for usize {
-            fn from(a: &SystemSegmentDescriptor) -> Self {
-                (a.base_63_32 as usize) << 32
-                    | (a.base_31_24 as usize) << 24
-                    | (a.base_23_16 as usize) << 16
-                    | (a.base_15_0 as usize)
-            }
-        }
         unsafe {
-            let gdt_tss_entry = &GDT.tss;
+            let gdt_tss_entry = &get_gdt().tss;
             let tss_addr: usize = gdt_tss_entry.into();
             assert!(gdt_tss_entry
                 .lower_flags
                 .contains(SegmentLowerFlags::TSS_SEGMENT));
 
             assert_eq!(tss_addr, &TSS as *const Tss as usize);
+        }
+    }
+
+    impl From<&SystemSegmentDescriptor> for usize {
+        fn from(a: &SystemSegmentDescriptor) -> Self {
+            (a.base_63_32 as usize) << 32
+                | (a.base_31_24 as usize) << 24
+                | (a.base_23_16 as usize) << 16
+                | (a.base_15_0 as usize)
+        }
+    }
+
+    #[test_case]
+    fn double_fault_stack_is_setup() {
+        let tss = get_tss();
+        unsafe {
+            let ist = IDT[14].assume_init().ist as usize;
+            let ist_contents = tss.ist_list[ist];
+            assert_ne!(ist_contents, 0);
         }
     }
 }

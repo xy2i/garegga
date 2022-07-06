@@ -6,6 +6,13 @@
 #![test_runner(crate::test::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 #![allow(unused_macros)]
+#![allow(dead_code)]
+
+#[cfg(not(test))]
+use core::panic::PanicInfo;
+
+use crate::boot::StivaleStruct;
+use crate::x86::hlt;
 
 mod boot;
 mod io;
@@ -16,10 +23,6 @@ mod serial;
 mod test;
 mod vga;
 mod x86;
-
-use crate::x86::hlt;
-#[cfg(not(test))]
-use core::panic::PanicInfo;
 
 // see test.rs for the panic test handler
 #[cfg(not(test))]
@@ -33,8 +36,16 @@ fn panic(info: &PanicInfo) -> ! {
 }
 
 #[no_mangle]
-extern "C" fn kernel_main(/*boot_info: &'static StivaleStruct*/) -> ! {
+extern "C" fn kernel_main(boot_info: &'static StivaleStruct) -> ! {
     interrupts::init();
+
+    let memmap = boot_info.memmap();
+
+    log!("{}", memmap.entries);
+    for i in 0..memmap.entries {
+        let entry = &memmap.values[i as usize];
+        log!("{entry:#x?}");
+    }
 
     #[cfg(test)]
     test_main();

@@ -2,8 +2,9 @@
 //! https://github.com/stivale/stivale/blob/master/STIVALE2.md
 //! https://github.com/stivale/stivale2-barebones
 
+use core::mem::size_of;
 use core::mem::MaybeUninit;
-use core::{mem, ptr};
+use core::ptr::slice_from_raw_parts;
 
 use crate::kernel_main;
 
@@ -14,18 +15,15 @@ const STACK_SIZE: usize = 0x1000 * 8;
 static STACK: Align<[u8; STACK_SIZE]> = Align([0; STACK_SIZE]);
 
 #[derive(Debug)]
+#[repr(C)]
 pub struct Tag {
     pub identifier: u64,
-    pub next: *const Tag,
+    pub next: Option<&'static Tag>,
 }
 
 impl Tag {
     pub const MEMORY_MAP: u64 = 0x2187f79e8612de07;
 }
-
-unsafe impl Send for Tag {}
-
-unsafe impl Sync for Tag {}
 
 struct Header {
     _entry_point: *const (),
@@ -42,18 +40,16 @@ unsafe impl Sync for Header {}
 pub struct StivaleStruct {
     bootloader_brand: [u8; 64],
     bootloader_version: [u8; 64],
-    tags: *const Tag,
+    tags: Option<&'static Tag>,
 }
 
 impl StivaleStruct {
-    pub fn get_tag(&self, identifier: u64) -> Option<u64> {
+    pub fn get_tag(&self, identifier: u64) -> Option<&Tag> {
         let mut current_tag = self.tags;
 
-        while !current_tag.is_null() {
-            let tag = unsafe { &*current_tag };
-
+        while let Some(tag) = current_tag {
             if tag.identifier == identifier {
-                return Some(current_tag as u64);
+                return Some(tag);
             }
 
             current_tag = tag.next;
@@ -62,28 +58,30 @@ impl StivaleStruct {
         None
     }
 
-    pub fn memmap(&self) -> &'static mut MemmapStructTag {
-        unsafe {
-            let ptr = self.get_tag(Tag::MEMORY_MAP).unwrap() as *mut usize;
-            let count = *(ptr.add(mem::size_of::<Tag>()) as *const u64);
-            MemmapStructTag::new(ptr, count)
-        }
+    pub fn memory_map(&self) -> &'static [MemmapEntry] {
+        let ptr = self.get_tag(Tag::MEMORY_MAP).unwrap() as *const Tag as *const u8;
+        MemmapStructTag::to_entries(ptr)
     }
 }
 
 #[derive(Debug)]
 #[repr(C)]
-pub struct MemmapStructTag {
+// We recieve this struct from the bootloader, however in practice
+// we only care about the values slice.
+struct MemmapStructTag {
     tag: Tag,
-    pub entries: u64,
-    pub values: [MemmapEntry],
+    entries: u64,
+    values: [MemmapEntry],
 }
 
 impl MemmapStructTag {
-    fn new(ptr: *mut usize, entry_count: u64) -> &'static mut Self {
+    // Do some pointer mangling to build the memory map array.
+    fn to_entries(ptr: *const u8) -> &'static [MemmapEntry] {
         unsafe {
-            let slice_ptr = ptr::slice_from_raw_parts_mut(ptr, entry_count as usize);
-            &mut *(slice_ptr as *mut Self)
+            let entries = *ptr.add(size_of::<Tag>()) as usize;
+            let values = ptr.add(size_of::<Tag>() + size_of::<u64>()) as *const MemmapEntry;
+            let slice = &*(slice_from_raw_parts(values, entries));
+            slice
         }
     }
 }
@@ -120,7 +118,7 @@ struct TerminalHeaderTag {
 static STIVALE_TERM: TerminalHeaderTag = TerminalHeaderTag {
     _tag: Tag {
         identifier: 0xa85d499b1823be72,
-        next: ptr::null(),
+        next: None,
     },
     _flags: 0,
 };

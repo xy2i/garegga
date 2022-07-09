@@ -3,10 +3,10 @@
 #![feature(custom_test_frameworks)]
 #![feature(abi_x86_interrupt)]
 #![feature(asm_const)]
-#![test_runner(crate::test::test_runner)]
-#![reexport_test_harness_main = "test_main"]
 #![allow(unused_macros)]
 #![allow(dead_code)]
+#![test_runner(crate::test::test_runner)]
+#![reexport_test_harness_main = "test_main"]
 
 #[cfg(not(test))]
 use core::panic::PanicInfo;
@@ -19,6 +19,7 @@ mod io;
 #[macro_use]
 mod logger;
 mod interrupts;
+mod pmm;
 mod serial;
 mod test;
 mod vga;
@@ -39,11 +40,8 @@ fn panic(info: &PanicInfo) -> ! {
 extern "C" fn kernel_main(boot_info: &'static StivaleStruct) -> ! {
     interrupts::init();
 
-    let memmap = boot_info.memmap();
-
-    log!("{}", memmap.entries);
-    for i in 0..memmap.entries {
-        let entry = &memmap.values[i as usize];
+    log!("Got {} memory map entries", boot_info.memory_map().len());
+    for entry in boot_info.memory_map() {
         log!("{entry:#x?}");
     }
 
